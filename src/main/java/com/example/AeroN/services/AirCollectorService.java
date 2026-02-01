@@ -2,17 +2,24 @@ package com.example.AeroN.services;
 
 import com.example.AeroN.AirData;
 import com.example.AeroN.OpenSkyData;
+import com.example.AeroN.enteties.AirEntity;
+import com.example.AeroN.enteties.ConditionEntity;
 import com.example.AeroN.repositories.AirRepository;
 import com.example.AeroN.repositories.ConditionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class AirCollectorService {
@@ -22,12 +29,30 @@ public class AirCollectorService {
     private AirRepository airRepository;
     private ConditionRepository conditionRepositry;
     private final ObjectMapper mapper = new ObjectMapper();
+    private final ModelMapper modelMapper;
 
     @Autowired
-    public AirCollectorService(RestTemplate restTemplate, AirRepository airRep, ConditionRepository conditionRep) {
+    public AirCollectorService(RestTemplate restTemplate, AirRepository airRep, ConditionRepository conditionRep, ModelMapper mp) {
         this.restTemplate = restTemplate;
         this.airRepository = airRep;
         this.conditionRepositry = conditionRep;
+        this.modelMapper = mp;
+    }
+
+    // Запускается каждые 20 сек.
+    @Scheduled(fixedRate = 30 * 1000)
+    public void loadData() {
+        try {
+            OpenSkyData data = getData();
+            if (data != null) {
+                System.out.println("данные получены");
+                List<AirEntity> airEntities = parseToAirEntities(data);
+                saveNewAirs(airEntities);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println(e.getMessage());
+        }
     }
 
 
@@ -40,7 +65,11 @@ public class AirCollectorService {
             List<AirData> airDataList = new ArrayList<>();
             openSkyData.setTime(jsonNode.get("time").asInt());
             for (JsonNode jn : jsonNode.path("states")) {
-                airDataList.add(parseToAirData(jn));
+                AirData airData = parseToAirData(jn);
+                if (airData.getOriginCountry().equals("Russian Federation")) {
+                    airDataList.add(airData);
+                }
+
             }
             openSkyData.setAirDataList(airDataList);
             return openSkyData;
@@ -74,4 +103,42 @@ public class AirCollectorService {
         }
         return airData;
     }
+
+
+    public List<AirEntity> parseToAirEntities(OpenSkyData data) {
+        LocalDateTime dateTime = LocalDateTime.ofEpochSecond(data.getTime(), 0, ZoneOffset.UTC);
+        List<AirEntity> toAdd = new ArrayList<>();
+        for (AirData airData : data.getAirDataList()) {
+            ConditionEntity entity = modelMapper.map(airData, ConditionEntity.class);
+            entity.setTime(dateTime);
+            AirEntity airEntity = new AirEntity();
+            airEntity.setIcao24(airData.getIcao24());
+            airEntity.setCountry(airData.getOriginCountry());
+            airEntity.setCategory(airData.getCategory());
+            airEntity.setConditions(List.of(entity));
+            entity.setAir(airEntity);
+            toAdd.add(airEntity);
+        }
+        return toAdd;
+    }
+
+
+    public void saveNewAirs(List<AirEntity> airs) {
+        Set<String> allIsao24 = airRepository.findAllIsao24();
+        List<AirEntity> airsToAdd = new ArrayList<>();
+        List<ConditionEntity> conditionsToAdd = new ArrayList<>();
+        for (AirEntity air : airs) {
+            if (!allIsao24.contains(air.getIcao24())) {
+                airsToAdd.add(air);
+            } else {
+                AirEntity airEntity = airRepository.findByIsao24(air.getIcao24());
+                ConditionEntity conditionEntity = air.getConditions().getFirst();
+                conditionEntity.setAir(airEntity);
+                conditionsToAdd.add(conditionEntity);
+            }
+        }
+        airRepository.saveAll(airsToAdd);
+        conditionRepositry.saveAll(conditionsToAdd);
+    }
+
 }
