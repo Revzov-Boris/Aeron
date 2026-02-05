@@ -24,6 +24,7 @@ public class AirEntity {
     @Column(nullable = true)
     private Integer category;
     @OneToMany(mappedBy = "air", cascade = CascadeType.ALL)
+    @OrderBy("time ASC")
     List<ConditionEntity> conditions;
 
 
