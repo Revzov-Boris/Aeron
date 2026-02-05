@@ -42,11 +42,12 @@ public class AirCollectorService {
     // Запускается каждые 20 сек.
     @Scheduled(fixedRate = 30 * 1000)
     public void loadData() {
+        System.out.println("Запущен сбор данных");
         try {
             OpenSkyData data = getData();
             if (data != null) {
-                System.out.println("данные получены");
                 List<AirEntity> airEntities = parseToAirEntities(data);
+                System.out.println("Перевод данных в entity-классы");
                 saveNewAirs(airEntities);
             }
         } catch (Exception e) {
@@ -58,6 +59,7 @@ public class AirCollectorService {
 
     public OpenSkyData getData() {
         String stringResult = restTemplate.getForObject(apiUrl, String.class);
+        System.out.println("Данные получены");
         System.out.println(stringResult.substring(0, 700));
         try {
             JsonNode jsonNode = mapper.readTree(stringResult);
@@ -72,6 +74,7 @@ public class AirCollectorService {
 
             }
             openSkyData.setAirDataList(airDataList);
+            System.out.println("Успешный парсинг данных в объекты");
             return openSkyData;
         } catch (JsonProcessingException e) {
             System.out.println("Ошибка json парсинга");
@@ -122,23 +125,28 @@ public class AirCollectorService {
         return toAdd;
     }
 
-
+    // добавляет новые самолеты с их состояниями
     public void saveNewAirs(List<AirEntity> airs) {
-        Set<String> allIsao24 = airRepository.findAllIsao24();
+        List<AirEntity> allAirs = airRepository.findAll();
+        List<String> allIsao24 = allAirs.stream().map(a -> a.getIcao24()).toList();
         List<AirEntity> airsToAdd = new ArrayList<>();
         List<ConditionEntity> conditionsToAdd = new ArrayList<>();
         for (AirEntity air : airs) {
             if (!allIsao24.contains(air.getIcao24())) {
+                System.out.println("Новый самолёт: " + air.getIcao24());
                 airsToAdd.add(air);
             } else {
-                AirEntity airEntity = airRepository.findByIsao24(air.getIcao24());
+                AirEntity airEntity = allAirs.stream().filter(a -> a.getIcao24().equals(air.getIcao24())).findFirst().get();
                 ConditionEntity conditionEntity = air.getConditions().getFirst();
                 conditionEntity.setAir(airEntity);
                 conditionsToAdd.add(conditionEntity);
             }
         }
         airRepository.saveAll(airsToAdd);
+        System.out.println("Добавлено " + airsToAdd.size() + " новых самолётов");
         conditionRepositry.saveAll(conditionsToAdd);
+        System.out.println("Добавлено " + conditionsToAdd.size() + " состояний");
+
     }
 
 }
