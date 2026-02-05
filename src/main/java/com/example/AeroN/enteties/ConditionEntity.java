@@ -1,10 +1,16 @@
 package com.example.AeroN.enteties;
 
 import jakarta.persistence.*;
+import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "conditions")
+@ToString
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class ConditionEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
