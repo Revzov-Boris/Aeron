@@ -6,7 +6,6 @@ import com.example.AeroN.repositories.AirRepository;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +24,7 @@ public class AirService {
 
 
     public List<AirView> getAllView() {
-        System.out.println("метод запущен");
+        System.out.println("обращение к /map");
         int minutes = 195;
         LocalDateTime lastTime = LocalDateTime.now().minusMinutes(minutes);
         List<AirEntity> allAirs = airRep.findLastOnLastMinut(lastTime);
@@ -41,9 +40,7 @@ public class AirService {
                     view.setCategory(entity.getCategory().toString());
                 }
                 views.add(view);
-                System.out.println(view);
             }
-
         }
         return views;
     }
